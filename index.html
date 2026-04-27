@@ -682,6 +682,8 @@ body{font-family:'Inter',sans-serif;color:var(--t1)}
   cursor:pointer;opacity:0;
   padding:2px 5px;border-radius:4px;transition:all .2s;
   font-weight:700;
+  z-index:10;
+  pointer-events:all;
 }
 .qcard:hover .qdel{opacity:1}
 .qdel:hover{color:#E05555;background:rgba(224,85,85,0.15);border-color:rgba(224,85,85,0.3);opacity:1!important}
@@ -3063,7 +3065,7 @@ function renderStrip(){
    QUEST ACTIONS
    ============================================= */
 function toggleQ(id,e){
-  if(e.target.classList.contains('qdel'))return;
+  if(e.target.closest('.qdel'))return;
   const c=S.completed||[];const i=c.indexOf(id);
   if(i===-1){
     // Mark complete — play hologram glitch then collapse

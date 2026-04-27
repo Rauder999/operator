@@ -2403,27 +2403,41 @@ function startAmbientParticles(){
       color:['#9A8FFF','#6B5FE0','#C4BCFF','#4A3AAA'][Math.floor(Math.random()*4)],
     });
   }
+  let _ambientLastTs=Date.now();
   function loop(){
-    ctx.clearRect(0,0,c.width,c.height);
-    for(let i=burstParticleList.length-1;i>=0;i--){
-      const p=burstParticleList[i];
-      p.x+=p.vx;p.y+=p.vy;p.vy+=0.18;p.alpha-=0.018;p.rotation=(p.rotation||0)+p.spin;
-      if(p.alpha<=0){burstParticleList.splice(i,1);continue;}
-      ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.rotation);
-      if(p.shape==='star'){drawStar(ctx,0,0,p.r*2,p.r,5);ctx.fillStyle=p.color;ctx.fill();}
-      else{ctx.fillStyle=p.color;ctx.fillRect(-p.r,-p.r,p.r*2,p.r*2);}
-      ctx.restore();
+    try{
+      _ambientLastTs=Date.now();
+      ctx.clearRect(0,0,c.width,c.height);
+      for(let i=burstParticleList.length-1;i>=0;i--){
+        const p=burstParticleList[i];
+        p.x+=p.vx;p.y+=p.vy;p.vy+=0.18;p.alpha-=0.018;p.rotation=(p.rotation||0)+p.spin;
+        if(p.alpha<=0){burstParticleList.splice(i,1);continue;}
+        ctx.save();ctx.globalAlpha=p.alpha;ctx.translate(p.x,p.y);ctx.rotate(p.rotation);
+        if(p.shape==='star'){drawStar(ctx,0,0,p.r*2,p.r,5);ctx.fillStyle=p.color;ctx.fill();}
+        else{ctx.fillStyle=p.color;ctx.fillRect(-p.r,-p.r,p.r*2,p.r*2);}
+        ctx.restore();
+      }
+      for(const p of ambientParticleList){
+        p.x+=p.vx;p.y+=p.vy;
+        if(p.y<-10)p.y=c.height+10;
+        if(p.x<-10)p.x=c.width+10;if(p.x>c.width+10)p.x=-10;
+        ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=1;ambientRAF=requestAnimationFrame(loop);
+    }catch(e){
+      ambientRAF=null;
+      setTimeout(startAmbientParticles,500);
     }
-    for(const p of ambientParticleList){
-      p.x+=p.vx;p.y+=p.vy;
-      if(p.y<-10)p.y=c.height+10;
-      if(p.x<-10)p.x=c.width+10;if(p.x>c.width+10)p.x=-10;
-      ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
-    }
-    ctx.globalAlpha=1;ambientRAF=requestAnimationFrame(loop);
   }
-  if(ambientRAF)cancelAnimationFrame(ambientRAF);loop();
+  if(ambientRAF)cancelAnimationFrame(ambientRAF);
+  ambientRAF=null;
+  loop();
+  // Watchdog: restart if loop stalls for >3s
+  if(window._ambientWatchdog)clearInterval(window._ambientWatchdog);
+  window._ambientWatchdog=setInterval(()=>{
+    if(ambientRAF&&Date.now()-_ambientLastTs>3000){ambientRAF=null;startAmbientParticles();}
+  },5000);
 }
 
 function stopAmbientParticles(){
@@ -2479,16 +2493,18 @@ function questBurst(x,y){
 function runQuestParticles(c){
   const ctx=c.getContext('2d');
   function loop(){
-    ctx.clearRect(0,0,c.width,c.height);
-    for(let i=questParticles.length-1;i>=0;i--){
-      const p=questParticles[i];
-      p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.alpha-=0.025;
-      if(p.alpha<=0){questParticles.splice(i,1);continue;}
-      ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
-    }
-    ctx.globalAlpha=1;
-    if(questParticles.length>0){questRAF=requestAnimationFrame(loop);}else{questRAF=null;}
+    try{
+      ctx.clearRect(0,0,c.width,c.height);
+      for(let i=questParticles.length-1;i>=0;i--){
+        const p=questParticles[i];
+        p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.alpha-=0.025;
+        if(p.alpha<=0){questParticles.splice(i,1);continue;}
+        ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      }
+      ctx.globalAlpha=1;
+      if(questParticles.length>0){questRAF=requestAnimationFrame(loop);}else{questRAF=null;}
+    }catch(e){questRAF=null;}
   }
   questRAF=requestAnimationFrame(loop);
 }
@@ -2657,12 +2673,11 @@ function startLuParticles(){
   // Initial burst
   for(let i=0;i<120;i++) luParticles.push(makeLuParticle(true));
 
-  function loop(){
+    function loop(){
+    try{
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
     // Spawn new particles continuously
     if(Math.random()<0.4) luParticles.push(makeLuParticle(false));
-
     luParticles=luParticles.filter(p=>{
       p.x+=p.vx;
       p.y+=p.vy;
@@ -2670,8 +2685,7 @@ function startLuParticles(){
       p.vx*=0.99;
       p.life-=p.decay;
       p.rot+=p.rotSpeed;
-
-      if(p.life<=0)return false;
+      if(p.life<=0)return false;;
 
       ctx.save();
       ctx.globalAlpha=Math.max(0,p.life);
@@ -2711,6 +2725,7 @@ function startLuParticles(){
     });
 
     luAnimFrame=requestAnimationFrame(loop);
+    }catch(e){luAnimFrame=null;}
   }
   loop();
 }
@@ -3081,6 +3096,8 @@ function toggleQ(id,e){
       const wasFirst=(c.length===1);
       const isAllDone=(c.length===S.quests.length);
       S.completed=c;
+      // Update streak on quest completion
+      updateStreakOnCompletion();
       save();
       if(q){gainXP(q.xp);}
       renderQuests();updateMoons();
@@ -3164,7 +3181,7 @@ function spawnXpOrbs(fromX, fromY, count, toChar){
 }
 
 function delQ(id,e){
-  e.stopPropagation();if(!confirm('Delete quest?'))return;
+  e.stopPropagation();
   S.quests=S.quests.filter(q=>q.id!==id);S.completed=(S.completed||[]).filter(x=>x!==id);
   save();renderQuests();updateMascot();updateMoons();
 }
@@ -3263,6 +3280,104 @@ function applyCommand(cmd){
     S.completed=(S.completed||[]).filter(id=>S.quests.find(q=>q.id===id));
     save();renderQuests();
   }
+  if(cmd.action==='delete_quest'){
+    S.quests=S.quests.filter(q=>String(q.id)!==String(cmd.questId));
+    S.completed=(S.completed||[]).filter(id=>String(id)!==String(cmd.questId));
+    save();renderQuests();updateMascot();
+  }
+  if(cmd.action==='clear_all'){
+    S.quests=[];
+    S.completed=[];
+    save();renderQuests();updateMascot();
+    spontaneousSpeak('...задачи сброшены.');
+  }
+}
+
+/* =============================================
+   STREAK COUNTER
+   ============================================= */
+function updateStreakOnCompletion(){
+  const t=today();
+  const prev=new Date();prev.setDate(prev.getDate()-1);
+  const yd=prev.toISOString().split('T')[0];
+  const lcd=S.lastCompletionDate||null;
+  if(lcd===t){
+    // Already completed something today, streak stays
+  } else if(lcd===yd){
+    // Completed yesterday, increment streak
+    S.streak=(S.streak||0)+1;
+  } else if(!lcd){
+    // First ever completion
+    S.streak=1;
+  } else {
+    // More than 1 day gap, reset to 1
+    S.streak=1;
+  }
+  S.lastCompletionDate=t;
+  document.getElementById('streak-n').textContent=S.streak||0;
+  // Pop animation
+  const w=document.querySelector('.widget-streak');
+  if(w){w.classList.remove('pop');void w.offsetWidth;w.classList.add('pop');setTimeout(()=>w.classList.remove('pop'),600);}
+}
+function checkStreakReset(){
+  // If a full day passed with zero completions, reset streak to 0
+  const t=today();
+  const prev=new Date();prev.setDate(prev.getDate()-1);
+  const yd=prev.toISOString().split('T')[0];
+  const lcd=S.lastCompletionDate||null;
+  if(lcd&&lcd!==t&&lcd!==yd){
+    // Last completion was more than 1 day ago
+    S.streak=0;
+    S.lastCompletionDate=null;
+    save();
+    document.getElementById('streak-n').textContent=0;
+  }
+}
+
+/* =============================================
+   DAILY RESET — lastActiveDate
+   ============================================= */
+function checkDailyReset(){
+  const t=today();
+  const stored=localStorage.getItem('lastActiveDate');
+  if(stored===t)return; // same day, nothing to do
+  // Day has changed
+  localStorage.setItem('lastActiveDate',t);
+  // Remove all daily quests
+  S.quests=(S.quests||[]).filter(q=>q.type==='recurring');
+  // Reset recurring quests back to uncompleted
+  S.completed=(S.completed||[]).filter(id=>{
+    const q=S.quests.find(x=>x.id===id);
+    return q&&q.type!=='recurring';
+  });
+  S.completed=[];
+  // Reset character mood
+  curState='lazy';
+  setMascotImg('lazy');
+  save();
+  renderQuests();
+  updateMascot(true);
+  renderTop();
+  // Show new-day notification
+  const dayNum=S.streak||1;
+  showNewDayNotif(dayNum);
+}
+function showNewDayNotif(dayNum){
+  let el=document.getElementById('new-day-notif');
+  if(!el){
+    el=document.createElement('div');
+    el.id='new-day-notif';
+    el.style.cssText='position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999;'+
+      'background:rgba(154,143,255,0.92);backdrop-filter:blur(12px);'+
+      'color:#fff;font-family:Orbitron,sans-serif;font-size:13px;font-weight:700;'+
+      'padding:10px 22px;border-radius:24px;letter-spacing:1px;'+
+      'box-shadow:0 4px 24px rgba(100,70,220,0.4);'+
+      'transition:opacity 0.6s ease;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent='New day — Day '+dayNum+' 🔥';
+  el.style.opacity='1';
+  setTimeout(()=>{el.style.opacity='0';},3000);
 }
 
 async function pollWorker(){
@@ -3287,14 +3402,19 @@ async function pollWorker(){
 setInterval(pollWorker,60000);
 // Initial poll after 5s
 setTimeout(pollWorker,5000);
-
 setTimeout(checkLogin,700);
-
+// Daily reset + streak check on load and every 60 minutes
+setTimeout(()=>{checkDailyReset();checkStreakReset();},1000);
+setInterval(()=>{checkDailyReset();checkStreakReset();},60*60*1000);
 // Start idle system
 scheduleIdleLine();
-
 // Idle glow every 8s
 setInterval(idleGlowMascot, 8000);
+// Restart ambient particles when tab becomes visible again
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&!ambientRAF)startAmbientParticles();
+  if(!document.hidden)checkDailyReset();
+});
 </script>
 </body>
 </html>
